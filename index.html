@@ -926,7 +926,14 @@ function fEUR(v){return `€ ${(v||0).toLocaleString('pt-PT',{minimumFractionDig
 function fDate(d){if(!d)return '—';const[y,m,day]=d.split('-');return `${day}/${m}/${y}`;}
 
 // ═══ FIRESTORE RULES NEEDED ═══
-// allow read, write: if true;
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
 
 // ═══ START ═══
 document.addEventListener('DOMContentLoaded',async()=>{
