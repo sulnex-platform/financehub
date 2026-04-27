@@ -12,7 +12,7 @@
 <!-- Firebase SDKs -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -32,6 +32,8 @@ window._db = db;
 window._auth = auth;
 window._GoogleAuthProvider = GoogleAuthProvider;
 window._signInWithPopup = signInWithPopup;
+window._signInWithRedirect = signInWithRedirect;
+window._getRedirectResult = getRedirectResult;
 window._signOut = signOut;
 window._onAuthStateChanged = onAuthStateChanged;
 window._firestore = { collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot };
@@ -547,7 +549,7 @@ textarea { resize: vertical; min-height: 80px; }
 <body>
 
 <!-- Loading -->
-<div class="loading-overlay" id="loadingOverlay">
+<div class="loading-overlay hidden" id="loadingOverlay">
   <div class="logo-icon" style="width:56px;height:56px;background:linear-gradient(135deg,#4f8cff,#7c3aed);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:0.5rem;">💎</div>
   <div class="loader"></div>
   <p style="color:var(--text2);font-size:0.85rem;">Carregando FinanceHub...</p>
@@ -559,7 +561,7 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- ═══════════════════════════════════════════
      LOGIN SCREEN
 ═══════════════════════════════════════════ -->
-<div id="loginScreen" style="display:none;">
+<div id="loginScreen">
   <div class="login-card">
     <div class="login-logo">💎</div>
     <h1>FinanceHub</h1>
@@ -1350,10 +1352,30 @@ let chartCat, chartPerson, chartMonthly;
 // ─── INIT ───
 document.addEventListener('firebaseReady', initApp);
 document.addEventListener('DOMContentLoaded', () => {
+  // Show login immediately
+  showLogin();
   if (window._firebaseReady) initApp();
+  // Safety timeout
+  setTimeout(() => {
+    document.getElementById('loadingOverlay').classList.add('hidden');
+  }, 5000);
 });
 
-function initApp() {
+async function initApp() {
+  // Check for redirect result first
+  try {
+    const result = await window._getRedirectResult(window._auth);
+    if (result?.user) {
+      currentUser = result.user;
+      await loadUserProfile(result.user);
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      showApp();
+      return;
+    }
+  } catch(e) {
+    console.log('Redirect result:', e.message);
+  }
+
   window._onAuthStateChanged(window._auth, async (user) => {
     document.getElementById('loadingOverlay').classList.add('hidden');
     if (user) {
@@ -1370,7 +1392,20 @@ function initApp() {
 async function handleGoogleLogin() {
   try {
     const provider = new window._GoogleAuthProvider();
-    await window._signInWithPopup(window._auth, provider);
+    // Try popup first, fallback to redirect
+    try {
+      await window._signInWithPopup(window._auth, provider);
+    } catch(popupErr) {
+      // If popup blocked or not supported, use redirect
+      if (popupErr.code === 'auth/popup-blocked' || 
+          popupErr.code === 'auth/popup-closed-by-user' ||
+          popupErr.code === 'auth/cancelled-popup-request') {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+        await window._signInWithRedirect(window._auth, provider);
+      } else {
+        throw popupErr;
+      }
+    }
   } catch(e) {
     showToast('Erro ao fazer login: ' + e.message, 'error');
   }
