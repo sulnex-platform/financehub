@@ -1350,6 +1350,7 @@ let settings = { exchangeRate: 5.50, categories: ['Alimentação','Transporte','
 let chartCat, chartPerson, chartMonthly;
 
 // ─── INIT ───
+let appInitialized = false;
 document.addEventListener('firebaseReady', initApp);
 document.addEventListener('DOMContentLoaded', () => {
   // Show login immediately
@@ -1358,14 +1359,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // Safety timeout
   setTimeout(() => {
     document.getElementById('loadingOverlay').classList.add('hidden');
+    if (!appInitialized) showLogin();
   }, 5000);
 });
 
 async function initApp() {
+  if (appInitialized) return;
   // Check for redirect result first
   try {
     const result = await window._getRedirectResult(window._auth);
     if (result?.user) {
+      appInitialized = true;
       currentUser = result.user;
       await loadUserProfile(result.user);
       document.getElementById('loadingOverlay').classList.add('hidden');
@@ -1377,6 +1381,8 @@ async function initApp() {
   }
 
   window._onAuthStateChanged(window._auth, async (user) => {
+    if (appInitialized) return;
+    appInitialized = true;
     document.getElementById('loadingOverlay').classList.add('hidden');
     if (user) {
       currentUser = user;
