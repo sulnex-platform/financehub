@@ -193,6 +193,15 @@ select option{background:var(--bg2);}textarea{resize:vertical;min-height:75px;}
       <div class="fg"><label>Email</label><input type="email" id="lEmail" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <div class="fg"><label>Senha</label><input type="password" id="lPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="lbtn" onclick="doLogin()">Entrar</button>
+      <button onclick="showReset()" style="width:100%;padding:.5rem;background:transparent;color:var(--text2);border:none;cursor:pointer;font-size:.8rem;margin-top:.5rem;font-family:'DM Sans',sans-serif;">Redefinir senha</button>
+    </div>
+    <div id="fReset" style="display:none;">
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:1rem;text-align:left;">Digite o email e a nova senha que deseja usar:</p>
+      <div class="fg"><label>Email</label><input type="email" id="resetEmail" placeholder="seu@email.com"></div>
+      <div class="fg"><label>Nova Senha</label><input type="password" id="resetPass" placeholder="Mínimo 6 caracteres"></div>
+      <div class="fg"><label>Código Admin</label><input type="password" id="resetCode" placeholder="Código de segurança"></div>
+      <button class="lbtn" onclick="doReset()">Redefinir Senha</button>
+      <button onclick="stab('login')" style="width:100%;padding:.5rem;background:transparent;color:var(--text2);border:none;cursor:pointer;font-size:.8rem;margin-top:.5rem;font-family:'DM Sans',sans-serif;">Voltar ao login</button>
     </div>
     <div id="fReg" style="display:none;">
       <div class="fg"><label>Nome completo</label><input type="text" id="rName" placeholder="Seu nome"></div>
@@ -542,8 +551,47 @@ let curRepTab='person';
 async function hashPass(p){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(p+'fh_salt_2024'));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}
 
 // ═══ AUTH ═══
-function stab(t){const l=t==='login';document.getElementById('fLogin').style.display=l?'block':'none';document.getElementById('fReg').style.display=l?'none':'block';document.getElementById('t1').classList.toggle('active',l);document.getElementById('t2').classList.toggle('active',!l);document.getElementById('lerr').style.display='none';}
+function stab(t){
+  const isL=t==='login';
+  document.getElementById('fLogin').style.display=isL?'block':'none';
+  document.getElementById('fReg').style.display=t==='reg'?'block':'none';
+  document.getElementById('fReset').style.display=t==='reset'?'block':'none';
+  document.getElementById('t1').classList.toggle('active',isL);
+  document.getElementById('t2').classList.toggle('active',t==='reg');
+  document.getElementById('lerr').style.display='none';
+}
+function showReset(){stab('reset');}
 function serr(m){const e=document.getElementById('lerr');e.textContent=m;e.style.display='block';}
+function sok(m){const e=document.getElementById('lerr');e.textContent=m;e.style.display='block';e.style.background='rgba(16,185,129,.1)';e.style.borderColor='rgba(16,185,129,.25)';e.style.color='var(--green)';}
+
+async function doReset(){
+  const btn=document.querySelector('#fReset .lbtn');
+  const email=document.getElementById('resetEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('resetPass').value;
+  const code=document.getElementById('resetCode').value;
+  if(!email||!pass){serr('Preencha email e nova senha.');return;}
+  if(pass.length<6){serr('Senha mínimo 6 caracteres.');return;}
+  // Admin reset code — change this to your own secret
+  const validCode = await hashPass('financehub2024reset');
+  const enteredCode = await hashPass(code);
+  if(enteredCode !== validCode){serr('Código de segurança incorreto.');return;}
+  btn.textContent='A redefinir...';btn.disabled=true;
+  try{
+    await waitFB();
+    const{collection,getDocs,query,where,doc,updateDoc}=window._fs;
+    const q=query(collection(window._db,'users'),where('email','==',email));
+    const snap=await getDocs(q);
+    if(snap.empty){serr('Email não encontrado.');btn.textContent='Redefinir Senha';btn.disabled=false;return;}
+    const hash=await hashPass(pass);
+    const userDoc=snap.docs[0];
+    await updateDoc(doc(window._db,'users',userDoc.id),{passHash:hash});
+    sok('✅ Senha redefinida com sucesso! Faça login agora.');
+    setTimeout(()=>stab('login'),2000);
+  }catch(e){
+    serr('Erro: '+e.message);
+  }
+  btn.textContent='Redefinir Senha';btn.disabled=false;
+}
 
 async function doLogin(){
   const btn=document.querySelector('#fLogin .lbtn');
