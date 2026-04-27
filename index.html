@@ -565,12 +565,54 @@ textarea { resize: vertical; min-height: 80px; }
   <div class="login-card">
     <div class="login-logo">💎</div>
     <h1>FinanceHub</h1>
-    <p>Controle total das suas finanças pessoais e familiares — cartões, contas, financiamentos e muito mais.</p>
-    <button class="btn-google" id="btnGoogleLogin">
-      <img src="https://www.google.com/favicon.ico" alt="Google">
-      Entrar com Google (Gmail)
-    </button>
-    <p style="margin-top:1.5rem;font-size:0.75rem;color:var(--text3);">Seus dados ficam seguros na nuvem Google (Firebase)</p>
+    <p>Controle total das suas finanças pessoais e familiares.</p>
+
+    <!-- Tabs -->
+    <div style="display:flex;background:var(--bg2);border-radius:10px;padding:4px;margin-bottom:1.5rem;">
+      <button id="tabLogin" onclick="switchAuthTab('login')" style="flex:1;padding:0.5rem;border:none;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;font-size:0.875rem;background:var(--card);color:var(--text);transition:all 0.15s;">Entrar</button>
+      <button id="tabRegister" onclick="switchAuthTab('register')" style="flex:1;padding:0.5rem;border:none;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;font-size:0.875rem;background:transparent;color:var(--text2);transition:all 0.15s;">Criar Conta</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="formLogin">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="seu@email.com" style="margin-bottom:0;">
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" style="margin-bottom:0;">
+      </div>
+      <button onclick="handleEmailLogin()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:1rem;font-family:'DM Sans',sans-serif;">
+        Entrar
+      </button>
+      <button onclick="handleForgotPassword()" style="width:100%;padding:0.6rem;background:transparent;color:var(--text2);border:none;cursor:pointer;font-size:0.8rem;margin-top:0.5rem;font-family:'DM Sans',sans-serif;">
+        Esqueci a senha
+      </button>
+    </div>
+
+    <!-- Register Form -->
+    <div id="formRegister" style="display:none;">
+      <div class="form-group">
+        <label>Nome completo</label>
+        <input type="text" id="registerName" placeholder="Seu nome">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="registerEmail" placeholder="seu@email.com">
+      </div>
+      <div class="form-group">
+        <label>Senha (mínimo 6 caracteres)</label>
+        <input type="password" id="registerPassword" placeholder="••••••••">
+      </div>
+      <button onclick="handleRegister()" style="width:100%;padding:0.9rem;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        Criar Conta
+      </button>
+    </div>
+
+    <div id="authError" style="margin-top:1rem;padding:0.75rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;color:var(--red);font-size:0.8rem;display:none;"></div>
+
+    <p style="margin-top:1.5rem;font-size:0.75rem;color:var(--text3);">Dados seguros na nuvem Google (Firebase)</p>
   </div>
 </div>
 
@@ -1353,10 +1395,8 @@ let chartCat, chartPerson, chartMonthly;
 let appInitialized = false;
 document.addEventListener('firebaseReady', initApp);
 document.addEventListener('DOMContentLoaded', () => {
-  // Show login immediately
   showLogin();
   if (window._firebaseReady) initApp();
-  // Safety timeout
   setTimeout(() => {
     document.getElementById('loadingOverlay').classList.add('hidden');
     if (!appInitialized) showLogin();
@@ -1365,21 +1405,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initApp() {
   if (appInitialized) return;
-  // Check for redirect result first
-  try {
-    const result = await window._getRedirectResult(window._auth);
-    if (result?.user) {
-      appInitialized = true;
-      currentUser = result.user;
-      await loadUserProfile(result.user);
-      document.getElementById('loadingOverlay').classList.add('hidden');
-      showApp();
-      return;
-    }
-  } catch(e) {
-    console.log('Redirect result:', e.message);
-  }
-
   window._onAuthStateChanged(window._auth, async (user) => {
     if (appInitialized) return;
     appInitialized = true;
@@ -1395,25 +1420,78 @@ async function initApp() {
 }
 
 // ─── AUTH ───
-async function handleGoogleLogin() {
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('formLogin').style.display = isLogin ? 'block' : 'none';
+  document.getElementById('formRegister').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('tabLogin').style.background = isLogin ? 'var(--card)' : 'transparent';
+  document.getElementById('tabLogin').style.color = isLogin ? 'var(--text)' : 'var(--text2)';
+  document.getElementById('tabRegister').style.background = isLogin ? 'transparent' : 'var(--card)';
+  document.getElementById('tabRegister').style.color = isLogin ? 'var(--text2)' : 'var(--text)';
+  document.getElementById('authError').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function handleEmailLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) { showAuthError('Preencha email e senha.'); return; }
   try {
-    const provider = new window._GoogleAuthProvider();
-    // Try popup first, fallback to redirect
-    try {
-      await window._signInWithPopup(window._auth, provider);
-    } catch(popupErr) {
-      // If popup blocked or not supported, use redirect
-      if (popupErr.code === 'auth/popup-blocked' || 
-          popupErr.code === 'auth/popup-closed-by-user' ||
-          popupErr.code === 'auth/cancelled-popup-request') {
-        document.getElementById('loadingOverlay').classList.remove('hidden');
-        await window._signInWithRedirect(window._auth, provider);
-      } else {
-        throw popupErr;
-      }
-    }
+    await window._signInWithEmailAndPassword(window._auth, email, password);
   } catch(e) {
-    showToast('Erro ao fazer login: ' + e.message, 'error');
+    const msgs = {
+      'auth/user-not-found': 'Utilizador não encontrado.',
+      'auth/wrong-password': 'Senha incorreta.',
+      'auth/invalid-email': 'Email inválido.',
+      'auth/too-many-requests': 'Muitas tentativas. Tente mais tarde.',
+      'auth/invalid-credential': 'Email ou senha incorretos.'
+    };
+    showAuthError(msgs[e.code] || 'Erro: ' + e.message);
+  }
+}
+
+async function handleRegister() {
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  if (!name || !email || !password) { showAuthError('Preencha todos os campos.'); return; }
+  if (password.length < 6) { showAuthError('A senha deve ter no mínimo 6 caracteres.'); return; }
+  try {
+    const cred = await window._createUserWithEmailAndPassword(window._auth, email, password);
+    // Save name to Firestore
+    const db = window._db;
+    const { doc, setDoc, collection, getDocs } = window._firestore;
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const role = usersSnap.empty ? 'admin' : 'user';
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      name, email, role, whatsapp: '', createdAt: new Date().toISOString()
+    });
+  } catch(e) {
+    const msgs = {
+      'auth/email-already-in-use': 'Este email já está registado.',
+      'auth/invalid-email': 'Email inválido.',
+      'auth/weak-password': 'Senha muito fraca.'
+    };
+    showAuthError(msgs[e.code] || 'Erro: ' + e.message);
+  }
+}
+
+async function handleForgotPassword() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { showAuthError('Digite o seu email primeiro.'); return; }
+  try {
+    await window._sendPasswordResetEmail(window._auth, email);
+    showAuthError('✅ Email de recuperação enviado! Verifique a caixa de entrada.');
+    document.getElementById('authError').style.background = 'rgba(34,197,94,0.1)';
+    document.getElementById('authError').style.borderColor = 'rgba(34,197,94,0.3)';
+    document.getElementById('authError').style.color = 'var(--green)';
+  } catch(e) {
+    showAuthError('Erro ao enviar email: ' + e.message);
   }
 }
 
@@ -1423,20 +1501,31 @@ async function handleLogout() {
   showLogin();
 }
 
-document.getElementById('btnGoogleLogin').addEventListener('click', handleGoogleLogin);
+// Enter key support for login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const loginVisible = document.getElementById('formLogin').style.display !== 'none';
+    if (loginVisible) handleEmailLogin();
+    else handleRegister();
+  }
+});
 
 // ─── USER PROFILE ───
 async function loadUserProfile(user) {
   const db = window._db;
-  const { doc, getDoc, setDoc } = window._firestore;
+  const { doc, getDoc, setDoc, collection, getDocs } = window._firestore;
   const ref = doc(db, 'users', user.uid);
   let snap = await getDoc(ref);
   if (!snap.exists()) {
-    // Check if any users exist; if not, make this user admin
-    const { collection, getDocs } = window._firestore;
     const usersSnap = await getDocs(collection(db, 'users'));
     const role = usersSnap.empty ? 'admin' : 'user';
-    const profile = { name: user.displayName || user.email, email: user.email, role, photo: user.photoURL || '', whatsapp: '', createdAt: new Date().toISOString() };
+    const profile = { 
+      name: user.displayName || user.email.split('@')[0], 
+      email: user.email, role, 
+      photo: user.photoURL || '', 
+      whatsapp: '', 
+      createdAt: new Date().toISOString() 
+    };
     await setDoc(ref, profile);
     currentUserProfile = { id: user.uid, ...profile };
   } else {
