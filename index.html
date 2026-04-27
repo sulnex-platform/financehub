@@ -546,36 +546,57 @@ function stab(t){const l=t==='login';document.getElementById('fLogin').style.dis
 function serr(m){const e=document.getElementById('lerr');e.textContent=m;e.style.display='block';}
 
 async function doLogin(){
-  const email=document.getElementById('lEmail').value.trim().toLowerCase(),pass=document.getElementById('lPass').value;
+  const btn=document.querySelector('#fLogin .lbtn');
+  const email=document.getElementById('lEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('lPass').value;
   if(!email||!pass){serr('Preencha email e senha.');return;}
-  await waitFB();
-  const{collection,getDocs,query,where}=window._fs;
-  const q=query(collection(window._db,'users'),where('email','==',email));
-  const snap=await getDocs(q);
-  if(snap.empty){serr('Email não encontrado.');return;}
-  const hash=await hashPass(pass);
-  let found=null;
-  snap.forEach(d=>{if(d.data().passHash===hash)found={id:d.id,...d.data()};});
-  if(!found){serr('Senha incorreta.');return;}
-  CU=found;localStorage.setItem('fh_uid',found.id);
-  await loadAll();showApp();
+  btn.textContent='A entrar...';btn.disabled=true;
+  try {
+    await waitFB();
+    if(!window._db||!window._fs){serr('Erro de ligação ao servidor. Recarregue a página.');btn.textContent='Entrar';btn.disabled=false;return;}
+    const{collection,getDocs,query,where}=window._fs;
+    const q=query(collection(window._db,'users'),where('email','==',email));
+    const snap=await getDocs(q);
+    if(snap.empty){serr('Email não encontrado. Crie uma conta primeiro.');btn.textContent='Entrar';btn.disabled=false;return;}
+    const hash=await hashPass(pass);
+    let found=null;
+    snap.forEach(d=>{if(d.data().passHash===hash)found={id:d.id,...d.data()};});
+    if(!found){serr('Senha incorreta. Tente novamente.');btn.textContent='Entrar';btn.disabled=false;return;}
+    CU=found;localStorage.setItem('fh_uid',found.id);
+    await loadAll();showApp();
+  } catch(e) {
+    serr('Erro: '+e.message+'. Verifique as regras do Firestore.');
+    btn.textContent='Entrar';btn.disabled=false;
+  }
 }
 
 async function doRegister(){
-  const name=document.getElementById('rName').value.trim(),email=document.getElementById('rEmail').value.trim().toLowerCase(),pass=document.getElementById('rPass').value,wa=document.getElementById('rWA').value.trim();
+  const btn=document.querySelector('#fReg .lbtn');
+  const name=document.getElementById('rName').value.trim();
+  const email=document.getElementById('rEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('rPass').value;
+  const wa=document.getElementById('rWA').value.trim();
   if(!name||!email||!pass){serr('Preencha todos os campos obrigatórios.');return;}
   if(pass.length<6){serr('Senha deve ter mínimo 6 caracteres.');return;}
-  await waitFB();
-  const{collection,getDocs,addDoc,query,where}=window._fs;
-  const q=query(collection(window._db,'users'),where('email','==',email));
-  const snap=await getDocs(q);
-  if(!snap.empty){serr('Este email já está registado.');return;}
-  const allSnap=await getDocs(collection(window._db,'users'));
-  const role=allSnap.empty?'admin':'user';
-  const hash=await hashPass(pass);
-  const ref=await addDoc(collection(window._db,'users'),{name,email,passHash:hash,role,whatsapp:wa,createdAt:new Date().toISOString()});
-  CU={id:ref.id,name,email,role,whatsapp:wa};localStorage.setItem('fh_uid',ref.id);
-  await loadAll();showApp();
+  btn.textContent='A criar conta...';btn.disabled=true;
+  try {
+    await waitFB();
+    if(!window._db||!window._fs){serr('Erro de ligação ao servidor. Recarregue a página.');btn.textContent='Criar Conta';btn.disabled=false;return;}
+    const{collection,getDocs,addDoc,query,where}=window._fs;
+    const q=query(collection(window._db,'users'),where('email','==',email));
+    const snap=await getDocs(q);
+    if(!snap.empty){serr('Este email já está registado. Faça login.');btn.textContent='Criar Conta';btn.disabled=false;return;}
+    const allSnap=await getDocs(collection(window._db,'users'));
+    const role=allSnap.empty?'admin':'user';
+    const hash=await hashPass(pass);
+    const ref=await addDoc(collection(window._db,'users'),{name,email,passHash:hash,role,whatsapp:wa,createdAt:new Date().toISOString()});
+    CU={id:ref.id,name,email,role,whatsapp:wa};
+    localStorage.setItem('fh_uid',ref.id);
+    await loadAll();showApp();
+  } catch(e) {
+    serr('Erro ao criar conta: '+e.message+'. Verifique as regras do Firestore.');
+    btn.textContent='Criar Conta';btn.disabled=false;
+  }
 }
 
 async function doLogout(){localStorage.removeItem('fh_uid');CU=null;document.getElementById('loginScreen').style.display='flex';document.getElementById('app').style.display='none';}
@@ -926,14 +947,7 @@ function fEUR(v){return `€ ${(v||0).toLocaleString('pt-PT',{minimumFractionDig
 function fDate(d){if(!d)return '—';const[y,m,day]=d.split('-');return `${day}/${m}/${y}`;}
 
 // ═══ FIRESTORE RULES NEEDED ═══
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}
+// allow read, write: if true;
 
 // ═══ START ═══
 document.addEventListener('DOMContentLoaded',async()=>{
